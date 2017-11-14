@@ -240,6 +240,15 @@ static void iterate_gi_into_string(MVMThreadContext *tc, MVMGraphemeIter *gi, MV
             }
         }
     }
+    if (result->body.num_graphs <= 8 && result->body.storage_type == MVM_STRING_GRAPHEME_8) {
+        MVMuint8 i;
+        MVMGrapheme8 *old = result->body.storage.blob_8;
+        for (i = 0; i < result->body.num_graphs; i++) {
+            result->body.storage.in_situ[i] = old[i];
+        }
+        result->body.storage_type    = MVM_STRING_IN_SITU;
+        MVM_free(old);
+    }
 }
 
 /* Collapses a bunch of strands into a single blob string. */
@@ -565,7 +574,7 @@ MVMString * MVM_string_substring(MVMThreadContext *tc, MVMString *a, MVMint64 of
     MVMROOT(tc, a, {
         result = (MVMString *)MVM_repr_alloc_init(tc, tc->instance->VMString);
         result->body.num_graphs = end_pos - start_pos;
-        if (a->body.storage_type != MVM_STRING_STRAND) {
+        if (a->body.storage_type != MVM_STRING_STRAND && result->body.num_graphs > 8) {
             /* It's some kind of buffer. Construct a strand view into it. */
             result->body.storage_type    = MVM_STRING_STRAND;
             result->body.storage.strands = allocate_strands(tc, 1);
@@ -575,7 +584,7 @@ MVMString * MVM_string_substring(MVMThreadContext *tc, MVMString *a, MVMint64 of
             result->body.storage.strands[0].end         = end_pos;
             result->body.storage.strands[0].repetitions = 0;
         }
-        else if (a->body.num_strands == 1 && a->body.storage.strands[0].repetitions == 0) {
+        else if (a->body.num_strands == 1 && a->body.storage.strands[0].repetitions == 0 && result->body.num_graphs > 8) {
             /* Single strand string; quite possibly already a substring. We'll
              * just produce an updated view. */
             MVMStringStrand *orig_strand = &(a->body.storage.strands[0]);
