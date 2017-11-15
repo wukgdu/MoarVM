@@ -244,9 +244,18 @@ static void iterate_gi_into_string(MVMThreadContext *tc, MVMGraphemeIter *gi, MV
         MVMuint8 i;
         MVMGrapheme8 *old = result->body.storage.blob_8;
         for (i = 0; i < result->body.num_graphs; i++) {
-            result->body.storage.in_situ[i] = old[i];
+            result->body.storage.in_situ_8[i] = old[i];
         }
-        result->body.storage_type    = MVM_STRING_IN_SITU;
+        result->body.storage_type    = MVM_STRING_IN_SITU_8;
+        MVM_free(old);
+    }
+    else if (result->body.num_graphs <= 2 && result->body.storage_type == MVM_STRING_GRAPHEME_32) {
+        MVMuint8 i;
+        MVMGrapheme32 *old = result->body.storage.blob_32;
+        for (i = 0; i < result->body.num_graphs; i++) {
+            result->body.storage.in_situ_32[i] = old[i];
+        }
+        result->body.storage_type    = MVM_STRING_IN_SITU_32;
         MVM_free(old);
     }
 }
@@ -1890,6 +1899,13 @@ MVMint64 MVM_string_char_at_in_string(MVMThreadContext *tc, MVMString *a, MVMint
                 return i;
         break;
     }
+    case MVM_STRING_IN_SITU_32: {
+        MVMStringIndex i;
+        for (i = 0; i < bgraphs; i++)
+            if (b->body.storage.in_situ_32[i] == search)
+                return i;
+        break;
+    }
     case MVM_STRING_GRAPHEME_ASCII:
         if (can_fit_into_ascii(search)) {
             MVMStringIndex i;
@@ -1906,11 +1922,11 @@ MVMint64 MVM_string_char_at_in_string(MVMThreadContext *tc, MVMString *a, MVMint
                     return i;
         }
         break;
-    case MVM_STRING_IN_SITU:
+    case MVM_STRING_IN_SITU_8:
         if (can_fit_into_8bit(search)) {
             MVMStringIndex i;
             for (i = 0; i < bgraphs; i++)
-                if (b->body.storage.in_situ[i] == search)
+                if (b->body.storage.in_situ_8[i] == search)
                     return i;
         }
         break;
@@ -2555,12 +2571,11 @@ MVMString * MVM_string_chr(MVMThreadContext *tc, MVMint64 cp) {
 
     s = (MVMString *)REPR(tc->instance->VMString)->allocate(tc, STABLE(tc->instance->VMString));
     if (can_fit_into_8bit(g)) {
-        s->body.storage_type       = MVM_STRING_IN_SITU;
-        s->body.storage.in_situ[0] = g;
+        s->body.storage_type         = MVM_STRING_IN_SITU_8;
+        s->body.storage.in_situ_8[0] = g;
     } else {
-        s->body.storage_type       = MVM_STRING_GRAPHEME_32;
-        s->body.storage.blob_32    = MVM_malloc(sizeof(MVMGrapheme32));
-        s->body.storage.blob_32[0] = g;
+        s->body.storage_type          = MVM_STRING_IN_SITU_32;
+        s->body.storage.in_situ_32[0] = g;
     }
     s->body.num_graphs         = 1;
     return s;
